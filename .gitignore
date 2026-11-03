@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+*_pasy.csv
+*_spektrum.csv
+*_spektrum.png
+*_zprava.txt
