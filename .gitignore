@@ -5,3 +5,4 @@ __pycache__/
 *_spektrum.csv
 *_spektrum.png
 *_zprava.txt
+local_data/

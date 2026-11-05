@@ -15,6 +15,7 @@ class Reference:
     formula: str
     peaks: tuple[tuple[float, str], ...]
     broad_oh: bool = False
+    cls: str = "other"     # main class as returned by the decision tree (interpret.main_class)
 
 
 def R(name, formula, spec, broad_oh=False):
@@ -22,7 +23,29 @@ def R(name, formula, spec, broad_oh=False):
     for tok in spec.split():
         s = tok[-1] if tok[-1] in "sw" else "m"
         peaks.append((float(tok.rstrip("sw")), s))
-    return Reference(name, formula, tuple(peaks), broad_oh)
+    return Reference(name, formula, tuple(peaks), broad_oh, CLASS_OF.get(name, "other"))
+
+
+CLASS_OF = {
+    "polystyren": "arene", "n-hexan": "alkane", "parafínový olej / dlouhý n-alkan": "alkane",
+    "cyklohexan": "alkane", "isooktan (2,2,4-trimethylpentan)": "alkane", "benzen": "arene",
+    "toluen": "arene", "o-xylen": "arene", "p-xylen": "arene", "styren": "arene",
+    "methanol": "alcohol", "ethanol": "alcohol", "propan-2-ol": "alcohol", "butan-1-ol": "alcohol",
+    "fenol": "phenol", "aceton": "ketone", "butan-2-on": "ketone", "cyklohexanon": "ketone",
+    "acetofenon": "ketone", "ethyl-acetát": "ester", "butyl-acetát": "ester",
+    "methyl-benzoát": "ester", "methyl-methakrylát": "ester", "kyselina octová": "acid",
+    "kyselina benzoová": "acid", "benzaldehyd": "aldehyde", "butanal": "aldehyde",
+    "diethylether": "ether", "tetrahydrofuran": "ether", "anisol": "ether",
+    "acetonitril": "nitrile", "benzonitril": "nitrile", "nitrobenzen": "nitro",
+    "nitromethan": "nitro", "anilin": "amine", "N,N-dimethylformamid": "amide",
+    "acetamid": "amide", "acetanhydrid": "anhydride", "hex-1-en": "alkene",
+    "fenylacetylen": "alkyne",
+    # compounds from the CACH II presentation
+    "hexan-3-on": "ketone", "oktan": "alkane", "hept-1-en": "alkene", "pent-1-yn": "alkyne",
+    "okt-4-yn": "alkane", "heptanal": "aldehyde", "ethyl-benzoát": "ester",
+    "kyselina butanová": "acid", "nonan-1-ol": "alcohol", "nonan-2-ol": "alcohol",
+    "nonan-2-on": "ketone", "ethoxybenzen": "ether", "butanamin": "amine",
+}
 
 
 REFERENCES = (
@@ -41,7 +64,6 @@ REFERENCES = (
     R("propan-2-ol", "C3H7OH", "3350s 2972s 1380 1370 1160 1130s 951 817", True),
     R("butan-1-ol", "C4H9OH", "3330s 2959s 2933 2874 1465 1380 1073 1030s", True),
     R("fenol", "C6H5OH", "3350s 3040 1595s 1500s 1475 1360 1230s 810 755s 690s", True),
-    R("voda", "H2O", "3400s 1640s", True),
     R("aceton", "C3H6O", "3005w 2965w 1715s 1420 1362s 1222s 1092w 530"),
     R("butan-2-on", "C4H8O", "2980 1717s 1460 1365 1172s 945w 760w"),
     R("cyklohexanon", "C6H10O", "2938s 2862 1715s 1449 1312 1220 1118"),
@@ -75,4 +97,18 @@ REFERENCES = (
     R("síran sodný", "Na2SO4", "1110s 617s"),
     R("dusičnan draselný", "KNO3", "1380s 825"),
     R("oxid křemičitý", "SiO2", "1080s 800 460s"),
+    # ---- compounds shown in the CACH II presentation (approximate maxima)
+    R("hexan-3-on", "C6H12O", "2970s 2940 2880 1717s 1460 1378 1110"),
+    R("oktan", "C8H18", "2958s 2925s 2856 1467 1379 723"),
+    R("hept-1-en", "C7H14", "3080 2960s 2927s 2858 1825w 1642 1460 993s 910s"),
+    R("pent-1-yn", "C5H8", "3312s 2967 2120w 1462 1380 632s"),
+    R("okt-4-yn", "C8H14", "2962s 2934s 2874 1462 1380"),
+    R("heptanal", "C7H14O", "2930s 2860 2820 2715 1730s 1465 1410 1380 1120"),
+    R("ethyl-benzoát", "C9H10O2", "3065w 2982 1720s 1603 1452 1368 1275s 1110s 1027 711s"),
+    R("kyselina butanová", "C4H8O2", "3000s 2970 2670 1712s 1415 1285 1220 935", True),
+    R("nonan-1-ol", "C9H20O", "3330s 2926s 2856s 1466 1378 1058s 722", True),
+    R("nonan-2-ol", "C9H20O", "3340s 2960 2927s 2857 1462 1374 1118s", True),
+    R("nonan-2-on", "C9H18O", "2928s 2858 1717s 1460 1415 1361 1164"),
+    R("ethoxybenzen", "C8H10O", "3063 2980 1600s 1497s 1245s 1048s 753s 691"),
+    R("butanamin", "C4H11N", "3370 3290 2960s 2930s 2873 1605 1465 1075 800s"),
 )

@@ -43,23 +43,20 @@ def test_polystyrene_image(mode, color, rotate):
     wns = np.array([p.wavenumber for p in res.peaks])
     for true in (3026, 2923, 1601, 1493, 1452, 757, 700):
         assert np.min(np.abs(wns - true)) <= 10, (true, wns)
-    st = {r.group.id: r.status for r in res.interpretation.groups}
-    assert st["aromatic"] == "potvrzeno"
+    assert res.interpretation.main_class == "arene"
     assert res.interpretation.references[0][0] == "polystyren"
 
 
 def test_ester_image():
     res = analyse_image(render("ethyl-acetát"), Settings())
-    st = {r.group.id: r.status for r in res.interpretation.groups}
-    assert st["ester"] == "potvrzeno"
+    assert res.interpretation.main_class == "ester"
 
 
-@pytest.mark.parametrize("name,mode,color,group", [
+@pytest.mark.parametrize("name,mode,color,cls", [
     ("kyselina benzoová", "T", "k", "acid"),
     ("benzaldehyd", "T", "tab:blue", "aldehyde"),
     ("aceton", "A", "tab:green", "ketone"),
 ])
-def test_other_images(name, mode, color, group):
+def test_other_images(name, mode, color, cls):
     res = analyse_image(render(name, mode, color, 0.5), Settings())
-    st = {r.group.id: r.status for r in res.interpretation.groups}
-    assert st[group] == "potvrzeno", res.interpretation.summary
+    assert res.interpretation.main_class == cls, res.interpretation.steps
