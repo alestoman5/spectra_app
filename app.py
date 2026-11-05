@@ -108,6 +108,10 @@ class App(tk.Tk):
         nb.add(f_sum, text="Výsledek")
         ttk.Label(f_sum, textvariable=self.summary_var, wraplength=1300, justify=tk.LEFT,
                   font=("TkDefaultFont", 11, "bold")).pack(anchor=tk.W, fill=tk.X)
+        # step-by-step trace of the decision scheme from the CACH II presentation
+        self.steps_var = tk.StringVar(value="")
+        ttk.Label(f_sum, textvariable=self.steps_var, wraplength=1300, justify=tk.LEFT,
+                  foreground="#37474f").pack(anchor=tk.W, fill=tk.X, pady=(4, 0))
         self.groups_tree = self._tree(f_sum, ("skupina", "vzorec", "stav", "shoda", "pásy", "pozn"),
                                       ("Funkční skupina", "Fragment", "Stav", "Shoda",
                                        "Nalezené pásy (cm⁻¹)", "Poznámka"),
@@ -345,14 +349,18 @@ class App(tk.Tk):
         res = self.result
         interp = res.interpretation
         self.summary_var.set(interp.summary)
+        self.steps_var.set("Postup: " + "  ➜  ".join(interp.steps))
         for t in (self.groups_tree, self.peaks_tree):
             t.delete(*t.get_children())
         for r in interp.groups:
             if r.status in ("potvrzeno", "možné") or r.status == "vyloučeno":
                 bands = ", ".join(f"{m.peak.wavenumber:.0f}" for m in r.matches if m.peak)
+                if r.status in ("potvrzeno", "možné") and r.missing:
+                    bands += "  (chybí " + ", ".join(b.range_str() for b in r.missing) + ")"
                 note = r.reason or r.group.note
                 self.groups_tree.insert("", tk.END, values=(
-                    r.group.name, r.group.formula, r.status, f"{r.score * 100:.0f} %", bands, note),
+                    r.group.name, r.group.formula, r.status,
+                    f"{r.score * 100:.0f} %" if r.status != "vyloučeno" else "–", bands, note),
                     tags=(r.status,))
         for p in res.peaks:
             ass = "; ".join(interp.assignments.get(p.wavenumber, [])) or "–"

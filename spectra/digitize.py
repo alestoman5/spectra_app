@@ -251,7 +251,7 @@ def detect_plot_area(rgb: np.ndarray) -> PlotArea:
             # corner must be near the left end of the horizontal and bottom end of the vertical
             dl = np.hypot(*(p - np.array(hseg[:2])))
             db = np.hypot(*(p - np.array(vseg[2:])))
-            if dl > 0.06 * w or db > 0.06 * h:
+            if dl > 0.06 * w or db > max(0.06 * h, 0.03 * max(h, w)):
                 continue
             area = hl * vl
             if area < 0.12 * w * h:
@@ -398,7 +398,9 @@ def _clean_curve_mask(m: np.ndarray) -> np.ndarray:
     n, lab, stats, _ = cv2.connectedComponentsWithStats(chain, connectivity=8)
     long_ids = [i for i in range(1, n) if stats[i, cv2.CC_STAT_WIDTH] >= 0.6 * w]
     hl = (np.isin(lab, long_ids) & (hs > 0)).astype(np.uint8)
-    band = max(4, int(0.03 * h))
+    # pieces hugging the very border (1 % of height) are frame remnants; flat parts of the
+    # spectrum close to the border (e.g. a 100 %T baseline at the top) are kept
+    band = max(2, int(0.01 * h))
     hl[:band] |= hs[:band]
     hl[-band:] |= hs[-band:]
     hl = cv2.dilate(hl, np.ones((3, 1), np.uint8))
@@ -437,7 +439,11 @@ def curve_mask(plot: np.ndarray, color: str = "auto") -> tuple[np.ndarray, str]:
             hist = np.convolve(np.r_[hist[-10:], hist, hist[:10]], np.ones(9), "same")[10:-10]
             hpk = int(np.argmax(hist))
             dh = np.minimum(np.abs(hue - hpk), 180 - np.abs(hue - hpk))
-            colored = colored & (dh < 14)
+            # once the hue of the curve is known, also accept its faint (anti-aliased, light)
+            # pixels: thin vertical strokes of sharp bands are often only pale pink/blue
+            faint = (dh < 14) & ~blue & (sat > max(14.0, 0.6 * thr)) & \
+                (sat > paper_sat + 8)
+            colored = (colored & (dh < 14)) | faint
         masks["color"] = _clean_curve_mask(colored)
     if color in ("auto", "dark"):
         masks["dark"] = _clean_curve_mask(dark & (sat < 110) & ~blue)
@@ -484,7 +490,7 @@ def extract_curve(plot: np.ndarray, color: str = "auto") -> Trace:
             seed = x
             break
     max_jump = 0.2 * h
-    max_lost = max(10, int(0.08 * w))
+    max_lost = max(10, int(0.5 * w))   # gaps (e.g. a baseline hidden in the frame) are bridged
 
     def track(xs, prev):
         lost = 0
@@ -558,14 +564,53 @@ def auto_x_calibration(rgb: np.ndarray, area: PlotArea, left_value: float = 4000
     reg = regular_ticks(ticks, w)
     if reg is not None and right_value is None:
         first, spacing = reg
-        # the label nearest to the left axis is the left value
-        p0 = first if abs(first) < 0.4 * spacing else 0.0
-        cal = XCalibration.from_points(p0, left_value, p0 + spacing, left_value - tick_step)
-        return cal, (f"automaticky z popisků osy x (rozteč {spacing:.0f} px = {tick_step:g} cm⁻¹, "
-                     f"rozsah {cal(0):.0f}–{cal(w - 1):.0f} cm⁻¹)")
+        cal = choose_label_hypothesis(first, spacing, w, left_value, tick_step)
+        if cal is not None:
+            step = abs(cal.a) * spacing
+            return cal, (f"automaticky z popisků osy x (rozteč {spacing:.0f} px = {step:g} cm⁻¹, "
+                         f"rozsah {cal(0):.0f}–{cal(w - 1):.0f} cm⁻¹)")
     rv = 400.0 if right_value is None else right_value
     return XCalibration.from_points(0, left_value, w - 1, rv), \
         f"z okrajů grafu ({left_value:g} → {rv:g} cm⁻¹)"
+
+
+# plausible ends of a mid-IR x axis
+_LEFT_RANGE = (3450.0, 4700.0)
+_RIGHT_RANGE = (200.0, 950.0)
+
+
+def choose_label_hypothesis(first: float, spacing: float, width: int, left_value: float = 4000,
+                            tick_step: float = 500) -> XCalibration | None:
+    """Pick the value of the first label and the label step.
+
+    Printouts differ: OMNIC labels 4000, 3500, … starting at the left axis, NIST WebBook plots
+    label 3000, 2000, 1000 with the left end somewhere near 3900. Every combination of
+    (value of the first label, step) gives the wavenumbers at both ends of the axis; only
+    combinations giving a plausible mid-IR range (left 3450–4700, right 200–950 cm⁻¹) are kept.
+    The user's setting (left value at the first label, tick step) wins when it is plausible.
+    """
+    def make(v0, step):
+        return XCalibration.from_points(first, v0, first + spacing, v0 - step)
+
+    def plausible(cal):
+        lft, rgt = float(cal(0)), float(cal(width - 1))
+        return _LEFT_RANGE[0] <= lft <= _LEFT_RANGE[1] and _RIGHT_RANGE[0] <= rgt <= _RIGHT_RANGE[1]
+
+    user = make(left_value, tick_step)
+    if plausible(user):
+        return user
+    best, best_cost = None, None
+    for step in (500.0, 1000.0, 250.0, 200.0):
+        for v0 in np.arange(5000.0, 1999.0, -step if step >= 500 else -500.0):
+            cal = make(float(v0), step)
+            if not plausible(cal):
+                continue
+            # prefer the usual 4000 → ~450 axis and the common steps
+            cost = abs(cal(0) - 4000) / 500 + abs(cal(width - 1) - 450) / 300 + \
+                (0 if step in (500.0, 1000.0) else 1)
+            if best_cost is None or cost < best_cost:
+                best, best_cost = cal, cost
+    return best
 
 
 def digitize(rgb: np.ndarray, area: PlotArea | None = None, color: str = "auto",

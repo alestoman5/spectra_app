@@ -46,7 +46,8 @@ def _finish(spec: Spectrum, settings: Settings, mode: str, info: str,
             x_range: tuple[float, float] | None = None, **kw) -> Result:
     proc = preprocess(spec, settings.smooth_window, settings.baseline)
     peaks = find_bands(proc, settings.prominence)
-    interp = interpret(peaks, x_range or (float(spec.x.min()), float(spec.x.max())))
+    interp = interpret(peaks, x_range or (float(spec.x.min()), float(spec.x.max())),
+                       spectrum=proc)
     return Result(spec, proc, peaks, interp, mode, info, **kw)
 
 
